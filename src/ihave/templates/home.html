@@ -1,5 +1,13 @@
 {% extends "base.html" %}
 
 {% block body %}
-  <div><a href="/auth/login">登录</a></div>
+	{% if current_user %}
+		<form action="{{ request.path }}" method="post" class="isbn">
+    		<div style="margin-bottom:5px"><input name="isbn" type="text" class="isbn" value=""/></div>
+      		<input type="submit" value="提交" class="submit"/>
+    		{{ xsrf_form_html() }}
+  		</form>
+    {% else %}
+    	{{ _('<a href="%(url)s">Sign in</a> to compose/edit') % {"url": "/auth/login?next=" + url_escape(request.uri)} }}
+    {% end %}
 {% end %}

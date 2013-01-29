@@ -21,6 +21,7 @@ from weiboapi.weibo import APIClient
 
 
 from tornado.options import define,options
+from douban import DoubanAPI
 
 APP_KEY = '1279033890' # app key
 APP_SECRET = '392001a59101bc9bee428429247f6251' # app secret
@@ -38,13 +39,15 @@ class Application(tornado.web.Application):
             (r"/",HomeHandler),
             (r"/auth/login",AuthLoginHandler),
             (r"/login_check",LoginCheckHandler),
+            (r"/auth/logout",AuthLogoutHandler),
+            (r"/isbn",ISBNHandler),
         ]
         settings=dict(
             title=u"I Have",
             template_path=os.path.join(os.path.dirname(__file__),"templates"),
             static_path=os.path.join(os.path.dirname(__file__),"static"),
             xsrf_cookies=True,
-            cookie_secret="",
+            cookie_secret="fuornqfnlasppirpqwnvmzm.mv.z",
             login_url="/auth/login",
             autoescape=None,
         )
@@ -59,12 +62,46 @@ class BaseHandler(tornado.web.RequestHandler):
     @property
     def db(self):
         return self.application.db
-
+    
+    def get_current_user(self):
+        user_id=self.get_secure_cookie("userid")
+        
+        if not user_id:return None
+        return self.db.get("SELECT * FROM users WHERE uid=%s",int(user_id))
 
 
 class HomeHandler(BaseHandler):
     def get(self):
         self.render("home.html")
+
+class ISBNHandler(BaseHandler):
+    print 'hello'
+    @tornado.web.authenticated
+    def get(self):
+        isbn=self.get_argument("isbn")
+        if isbn:
+            book=DoubanAPI.get_book_info(isbn)
+            print book
+        else:
+            return
+        self.redirect("/")
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
 
 class AuthLoginHandler(BaseHandler):
     @tornado.web.asynchronous
@@ -83,14 +120,21 @@ class LoginCheckHandler(BaseHandler):
         uid=r.uid
         client.set_access_token(access_token,expires_in)
         
-        userinfo=client.users__show(uid=uid)
-        if userinfo:
-            self.db.execute("INSERT INTO users(uid,username,province,city,location,gender,profile_image_url,verified,followers_count,friends_count,avatar_large,verified_reason,bi_followers_count) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+        user=self.db.get("SELECT username FROM users WHERE uid=%s",uid)
+        if not user:
+            userinfo=client.users__show(uid=uid)
+            if userinfo:
+                self.db.execute("INSERT INTO users(uid,username,province,city,location,gender,profile_image_url,verified,followers_count,friends_count,avatar_large,verified_reason,bi_followers_count) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
                             userinfo['id'],userinfo['screen_name'],userinfo['province'],userinfo['city'],userinfo['location'],userinfo['gender'],userinfo['profile_image_url'],userinfo['verified'],userinfo['followers_count'],userinfo['friends_count'],userinfo['avatar_large'],userinfo['verified_reason'],userinfo['bi_followers_count'])
-        else:
-            return
-         
-        self.render("home.html")
+            else:
+                return
+        self.set_secure_cookie("userid",str(uid))
+        self.redirect("/")
+
+class AuthLogoutHandler(BaseHandler):
+    def get(self):
+        self.clear_cookie("userid")
+        self.redirect(self.get_argument("next","/"))
 
 def main():
     tornado.options.parse_command_line()
